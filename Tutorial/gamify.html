@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chatroom with Gemini API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background-color: #333;
+            /* Dark background */
+            color: #ccc;
+            /* Light text */
+
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            /* White text for headings */
+        }
+
+        #messageForm {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        #messageInput {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #555;
+            /* Darker borders */
+            background-color: #222;
+            /* Dark input fields */
+            color: #ddd;
+            /* Light text */
+            border-radius: 5px;
+            outline: none;
+        }
+
+        #messageInput:focus {
+            border-color: dodgerblue;
+        }
+
+        #messageInput::placeholder {
+            color: #777;
+            /* Darker placeholder */
+        }
+
+        #messageInput:focus::placeholder {
+            color: transparent;
+        }
+
+        #sendMessageBtn {
+            padding: 10px 20px;
+            background-color: #555;
+            /* Darker button */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        #sendMessageBtn:hover {
+            background-color: #777;
+            /* Lighter on hover */
+        }
+
+        #messages {
+            padding: 0 20px;
+            overflow-y: scroll;
+            max-height: 300px;
+            background-color: #222;
+            /* Dark background for messages */
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            color: #ccc;
+            /* Light text for messages */
+        }
+
+        .userMessage {
+            background-color: #444;
+            /* Darker user message */
+            text-align: right;
+        }
+
+        .botMessage {
+            background-color: #555;
+            /* Darker bot message */
+            text-align: left;
+        }
+
+        #startButton:hover {
+            background: rgba(0, 0, 0, 1);
+            /* Darker background on hover */
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5);
+            /* Slightly larger shadow on hover */
+        }
+
+        #startButton {
+            padding: 15px 30px;
+            /* Increase padding for a better look */
+            font-size: 20px;
+            /* Adjust font size */
+            cursor: pointer;
+            /* Position it within the wrapper */
+            margin-bottom: 20px;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            /* Text color */
+            background: rgba(0, 0, 0, 0.8);
+            /* Same semi-transparent background as introBlock */
+            border: 1px solid #fff;
+            /* Same border as introBlock */
+            border-radius: 5px;
+            /* Rounded corners similar to introBlock */
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+            /* Subtle shadow for depth */
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Chatroom</h1>
+    <button id="startButton">Start Game</button>
+    <form id="messageForm">
+        <input type="text" id="messageInput" placeholder="Type your message here..." required>
+        <button id="sendMessageBtn" type="submit">Send</button>
+    </form>
+    <div id="sceneImage" style="text-align:center; margin-top:20px;">
+        <!-- 圖片將在這裡顯示 -->
+    </div>
+    <div id="messages"></div>
+    <script>
+        var conversationHistory = [];
+
+        var apiKey = prompt("Please enter your API key:", "");
+
+        if (!apiKey) {
+            alert("API key and name are required to use the chatroom.");
+        } else {
+            document.getElementById('messageForm').addEventListener('submit', function (event) {
+                event.preventDefault();
+                var message = document.getElementById('messageInput').value;
+
+                addToConversationHistory('user', message);
+                displayMessage(message, 'user');
+
+                fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "contents": conversationHistory,
+                        "safetySettings": [
+                            {
+                                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                "threshold": "BLOCK_ONLY_HIGH"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                "threshold": "BLOCK_ONLY_HIGH"
+                            },
+                        ],
+                        "generationConfig": {
+                            "stopSequences": [
+                                ""
+                            ],
+                            "temperature": 1.0,
+                            "maxOutputTokens": 2048,
+                            "topP": 0.8,
+                            "topK": 10
+                        }
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        var responseText = data.candidates[0].content.parts[0].text;
+                        addToConversationHistory('model', responseText);
+                        displayMessage(responseText, 'bot');
+                    })
+                    .catch(error => console.error('Error:', error));
+
+                document.getElementById('messageInput').value = '';
+            });
+        }
+
+        function addToConversationHistory(role, text) {
+            conversationHistory.push({
+                "role": role,
+                "parts": [{
+                    "text": text
+                }]
+            });
+        }
+
+        function displayMessage(message, sender) {
+            var messageElement = document.createElement('div');
+            var formatMessage = formatText(message);
+            messageElement.innerHTML = formatMessage;
+            messageElement.classList.add('message');
+            if (sender === 'user') {
+                messageElement.classList.add('userMessage');
+            } else {
+                messageElement.classList.add('botMessage');
+            }
+            document.getElementById('messages').appendChild(messageElement);
+            // Scroll to bottom
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            updateSceneImage(message);
+        }
+
+        function updateSceneImage(responseText) {
+            let sceneMatch = responseText.match(/場景：(.*?)\s/); // 使用正則表達式匹配場景描述
+            if (sceneMatch && sceneMatch[1]) {
+                let scene = sceneMatch[1];
+                console.log(scene);
+                // 檢查scene是否包含"宿舍"
+                if (scene.includes("宿舍")) {
+                    document.getElementById('sceneImage').innerHTML = '<img src="../img/dorm.jpeg" alt="Dorm" style="width:500px;">';
+                } else if (scene.includes("聚會")) {
+                    document.getElementById('sceneImage').innerHTML = '<img src="../img/party.jpeg" alt="Dorm" style="width:500px;">';
+                } else if (scene.includes("圖書館")) {
+                    document.getElementById('sceneImage').innerHTML = '<img src="../img/library.jpeg" alt="Dorm" style="width:500px;">';
+                }
+                else {
+                    // 如果不包含"宿舍"，可以在這裡處理其他情況或者不進行任何操作
+                    // 例如清空圖片或顯示預設圖片
+                    document.getElementById('sceneImage').innerHTML = ''; // 清空圖片
+                }
+            }
+        }
+
+        function formatText(text) {
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<br><strong>$1</strong>');
+
+            formattedText = formattedText.replace(/\*(.*?)\s/g, '<br>$1');
+
+            return formattedText;
+        }
+
+        document.getElementById('startButton').addEventListener('click', function () {
+            conversationHistory.push({
+                "role": 'user',
+                "parts": [{
+                    "text": `腳本：
+                        """
+                        遊戲標題：心聲之選
+                        遊戲背景
+                        亞歷克斯是一位剛入學的大學新生，試圖在新環境中找到自己的定位並建立人際關係。遊戲通過亞歷克斯的互動和選擇來探索表達真實感受的重要性。
+
+                        主要角色：
+                        亞歷克斯：主角，內向的大學新生。
+                        傑米：亞歷克斯的室友，開朗活潑。
+                        艾琳：亞歷克斯的同學，溫和且善於聆聽。
+                        遊戲腳本流程
+
+                        開場：
+                        （場景：宿舍）
+                        傑米邀請亞歷克斯參加周末聚會。
+                        選擇A：接受邀請。
+                        選擇B：婉拒，說自己有點累。
+
+                        聚會上的互動：
+                        （場景：聚會）
+                        若選擇A，亞歷克斯到達聚會，但感到不適。
+                         選擇A1：告訴傑米想要早點回去。 （選擇後進入學業合作劇情）
+                         選擇A2：決定忍耐，不表達自己的感受。（選擇後進入學業合作劇情）
+
+                        若選擇B，亞歷克斯在宿舍休息，傑米回來時看起來很高興。
+                         選擇B1：詢問傑米聚會的情況。（選擇後進入學業合作劇情）
+                         選擇B2：沒有表達興趣，繼續自己的事情。（選擇後進入學業合作劇情）
+
+                        學業合作：
+                        （場景：圖書館）
+                        亞歷克斯和艾琳被分配到同一個小組做專題。
+                        亞歷克斯對艾琳的印象逐漸加深。
+                        選擇A：坦白對艾琳的好感。（選擇後進入結局，根據玩家的選擇進行反思及回顧）
+                        選擇B：保留自己的感情，不透露。（選擇後進入結局，根據玩家的選擇進行反思及回顧）
+
+                        結局：
+                        開放表達結局：如果亞歷克斯選擇在關鍵時刻表達自己的感受（A1和A），他與傑米和艾琳的關係都將變得更加親密和真誠。傑米和艾琳對亞歷克斯的坦率和開放表示欣賞和支持，從而建立起更深的情感聯繫。
+
+                        壓抑感受結局：如果亞歷克斯選擇壓抑自己的感受（A2和B），則會感到孤立和不被理解。與傑米的關係因缺乏溝通而逐漸疏遠，而與艾琳的潛在關係也因為不敢開放表達而未能發展。
+
+                        遊戲結尾
+                        遊戲最後將根據亞歷克斯的選擇提供一段反思，強調在人際關係中開放表達自己感受的重要性，以及這種溝通方式對個人和周圍人的影響。"""
+
+                        請根據腳本中的對話，根據"""開場"""到"""聚會上的互動"""最後到"""學業合作"""進行，開始一個文字冒險遊戲，每一次的對話，都需要呈現以下格式與資訊：
+                        <場景>：目前故事的背景為何
+                        <選擇>：在每一次的對話中，你都會根據腳本給我可以選擇的動作，根據我選擇的動作繼續接下來的劇情，整體劇情會圍繞腳本發展。
+
+                        根據我的選擇進行故事就好，不要幫我做出選擇`
+                }]
+            })
+            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "contents": conversationHistory,
+                    "safetySettings": [
+                        {
+                            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                    ],
+                    "generationConfig": {
+                        "stopSequences": [
+                            ""
+                        ],
+                        "temperature": 2.0,
+                        "maxOutputTokens": 2048,
+                        "topP": 0.8,
+                        "topK": 10
+                    }
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(conversationHistory);
+                    var responseText = data.candidates[0].content.parts[0].text;
+                    addToConversationHistory('model', responseText);
+                    displayMessage(responseText, 'bot');
+                })
+                .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+
+</html>
